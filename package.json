@@ -9,8 +9,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "async-file-reader": "^0.1.1",
     "dateformat": "^3.0.3",
+    "file-exists": "^5.0.1",
     "shelljs": "^0.8.1",
-    "simple-fetch": "^1.5.0"
+    "simple-fetch": "^1.5.0",
+    "vwap": "0.0.2"
   }
 }
