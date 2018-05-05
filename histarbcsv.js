@@ -30,7 +30,7 @@ async function readInterval({file, first, end, rate}) {
     }
   } while (line != null && within);
   let done = (line == null);
-  return { price: vwap(ret), done, after };
+  return { price: vwap(ret), done, after, data: ret };
 }
 
 async function getLineCount(filename) {
@@ -138,21 +138,27 @@ async function loadAndProcess(params) {
     let rateA = await getRate({currency:exchAcurr, time: curr});
     let rateB = await getRate({currency:exchBcurr, time: curr});
     
-    let {price:priceA, done:doneA, after} = await readInterval({file: fileA, end: intervalEnd, first:afterA, rate:rateA});
+    let {price:priceA, done:doneA, after, data} = await readInterval({file: fileA, end: intervalEnd, first:afterA, rate:rateA});
     afterA = after;
+    if (priceA < 100 ) {
+       console.log({priceA, done, after, data}, 'fail');
+       process.exit();
+    }
     let priceB, doneB;
     ({price:priceB, done:doneB, after} = await readInterval({file: fileB, end: intervalEnd, first:afterB, rate:rateB}));
     afterB = after;
     done = doneA || doneB || curr >= end;
     //console.log({priceA, priceB, doneA, doneB, afterA, afterB});
-    
-    let dt = dateformat(new Date(intervalEnd*1000), 'mm-dd-yyyy hh:mm:ss a', true);
+     
+
+
+    let dt = dateformat(new Date(intervalEnd*1000), 'mm-dd-yyyy hh:MM:ss TT Z', true);
     let spread = ((priceA - priceB) / priceA) * 100.0;
     outcsv.write([dt, priceA, priceB, spread.toFixed(2)].join(','));
     outcsv.write('\n');
     let percentDone =(((total-intervalEnd) / total) * 100.0).toFixed(0) ;
     if (percentDone % 5 == 0 && lastPerc != percentDone) {
-      console.log(dateformat(curr,'mm-dd hh:mm TT Z'));
+      console.log(dateformat(curr,'mm-dd hh:MM:ss TT Z'));
       lastPerc = percentDone;
     }
   } while (!done);
