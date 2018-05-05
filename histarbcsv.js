@@ -10,12 +10,16 @@ const fileExists = require('file-exists');
 
 let rates = {};
 
-async function readInterval({file, first, end, rate}) {
+async function readInterval({file, first, start, end, rate, dbg}) {
   let ret = [];
   let after = null;
   rate = 1.0/rate;
+  if (end > first[2]) return {
+     done: false, price: 0, after: first, data:[]
+  }
   if (first) ret.push([first[0]*rate,first[1]]);
   let within = false;
+  let count = 0;
   do {
     line = await file.readLine();
     if (line != null) {
@@ -25,11 +29,18 @@ async function readInterval({file, first, end, rate}) {
       price= price *1;
       vol = vol * 1;
       within = (time <= end);
-      if (within) ret.push([vol,price*rate]); else after=[vol,price];
-      //console.log("inside interval line");
+      if (within) ret.push([vol,price*rate]); else after=[vol,price,time];
+      count++;
+      if (!within) console.log(end - time);
+      if (dbg) {
+        console.log(new Date(time*1000), new Date(end*1000));
+
+      }
+      //if (dbg) console.log("inside interval line", line);
     }
   } while (line != null && within);
   let done = (line == null);
+  //if (dbg) console.log(count);
   return { price: vwap(ret), done, after, data: ret };
 }
 
@@ -118,7 +129,7 @@ async function loadAndProcess(params) {
 	
   let count = await getLineCount(filenameA);
   await skipToStart({file: fileA, start, count});
-
+  
   count = await getLineCount(filenameB);
   await skipToStart({file: fileB, start, count});
 
@@ -138,17 +149,20 @@ async function loadAndProcess(params) {
     let rateA = await getRate({currency:exchAcurr, time: curr});
     let rateB = await getRate({currency:exchBcurr, time: curr});
     
-    let {price:priceA, done:doneA, after, data} = await readInterval({file: fileA, end: intervalEnd, first:afterA, rate:rateA});
+    let {price:priceA, done:doneA, after, data} = await readInterval({file: fileA, end: intervalEnd, first:afterA, rate:rateA, dbg:true});
     afterA = after;
     if (priceA < 100 ) {
        console.log({priceA, done, after, data}, 'fail');
-       process.exit();
+       //process.exit();
     }
     let priceB, doneB;
     ({price:priceB, done:doneB, after} = await readInterval({file: fileB, end: intervalEnd, first:afterB, rate:rateB}));
     afterB = after;
     done = doneA || doneB || curr >= end;
-     
+
+    if (done) {
+      console.log({curr,end,doneA,doneB,priceA,priceB});
+    }
     priceA = priceA.toFixed(2)*1.0;
     priceB = priceB.toFixed(2)*1.0;
 
@@ -186,8 +200,12 @@ async function test() {
   //let data = await requestTimeframeExchange({start, end, currency});
   //console.log(data);
   let start = new Date('03-01-2018'), end = new Date('04-01-2018');
-  await histCSV({intervalSeconds:60,start, end, exchA:'bitflyer',exchB:'bitstamp',exchAcurr:'JPY',
-	         exchBcurr:'USD'});
+  //await histCSV({intervalSeconds:60,start, end, exchA:'bitflyer',exchB:'bitstamp',exchAcurr:'JPY',
+  //	         exchBcurr:'USD'});
+  //await histCSV({intervalSeconds:60,start, end, exchA:'kraken',exchB:'bitstamp',exchAcurr:'USD',
+  //	         exchBcurr:'USD'});
+  await histCSV({intervalSeconds:60,start, end, exchA:'btcc',exchB:'bitstamp',exchAcurr:'USD',
+  	         exchBcurr:'USD'});
 }
 
 test().catch(console.error);
