@@ -122,17 +122,20 @@ async function loadAndProcess(params) {
   count = await getLineCount(filenameB);
   await skipToStart({file: fileB, start, count});
 
-  let outfname = exchA+exchAcurr+exchB+exchBcurr+start+'_'+end+'.csv';
+  let st_ = dateformat(start, 'mmddyy');
+  let en_ = dateformat(end, 'mmddyy');
+  let outfname = exchA+exchAcurr+exchB+exchBcurr+st_+'_'+en_+'.csv';
   let outcsv = fs.createWriteStream('data/downloads/'+outfname);
 
   let intervalEnd = start.getTime() / 1000;
   let done = false;
+  let lastPerc = 0;
   let total = (end.getTime()/1000) - (start.getTime()/1000);
   let afterA = false; let afterB = false, curr = new Date('01-01-1970');
   do {
     intervalEnd += intervalSeconds; 
     curr = new Date(intervalEnd*1000);
-    let rateA = await getRate({currency:exchAcurr, time: curr)});
+    let rateA = await getRate({currency:exchAcurr, time: curr});
     let rateB = await getRate({currency:exchBcurr, time: curr});
     
     let {price:priceA, done:doneA, after} = await readInterval({file: fileA, end: intervalEnd, first:afterA, rate:rateA});
@@ -147,8 +150,11 @@ async function loadAndProcess(params) {
     let spread = ((priceA - priceB) / priceA) * 100.0;
     outcsv.write([dt, priceA, priceB, spread.toFixed(2)].join(','));
     outcsv.write('\n');
-    let percentDone =((intervalEnd / total) * 100.0).toFixed(0) ;
-    if (percentDone % 5 == 0) console.log(percentDone); 
+    let percentDone =(((total-intervalEnd) / total) * 100.0).toFixed(0) ;
+    if (percentDone % 5 == 0 && lastPerc != percentDone) {
+      console.log(dateformat(curr,'mm-dd hh:mm TT Z'));
+      lastPerc = percentDone;
+    }
   } while (!done);
 
   outcsv.close(); 
