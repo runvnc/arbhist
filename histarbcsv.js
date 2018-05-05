@@ -128,25 +128,26 @@ async function loadAndProcess(params) {
   let intervalEnd = start.getTime() / 1000;
   let done = false;
   let total = (end.getTime()/1000) - (start.getTime()/1000);
-  let afterA = false; let afterB = false;
+  let afterA = false; let afterB = false, curr = new Date('01-01-1970');
   do {
-    intervalEnd += intervalSeconds;      
-    let rateA = await getRate({currency:exchAcurr, time: new Date(intervalEnd*1000)});
-    let rateB = await getRate({currency:exchBcurr, time: new Date(intervalEnd*1000)});
+    intervalEnd += intervalSeconds; 
+    curr = new Date(intervalEnd*1000);
+    let rateA = await getRate({currency:exchAcurr, time: curr)});
+    let rateB = await getRate({currency:exchBcurr, time: curr});
     
     let {price:priceA, done:doneA, after} = await readInterval({file: fileA, end: intervalEnd, first:afterA, rate:rateA});
     afterA = after;
     let priceB, doneB;
     ({price:priceB, done:doneB, after} = await readInterval({file: fileB, end: intervalEnd, first:afterB, rate:rateB}));
     afterB = after;
-    done = doneA || doneB;
+    done = doneA || doneB || curr >= end;
     //console.log({priceA, priceB, doneA, doneB, afterA, afterB});
     
     let dt = dateformat(new Date(intervalEnd*1000), 'mm-dd-yyyy hh:mm:ss a', true);
     let spread = ((priceA - priceB) / priceA) * 100.0;
     outcsv.write([dt, priceA, priceB, spread.toFixed(2)].join(','));
     outcsv.write('\n');
-    let percentDone =((intervalEnd / total) * 100.0).toFixed(0) + '%';
+    let percentDone =((intervalEnd / total) * 100.0).toFixed(0) ;
     if (percentDone % 5 == 0) console.log(percentDone); 
   } while (!done);
 
