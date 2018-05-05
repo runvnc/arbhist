@@ -14,7 +14,7 @@ async function readInterval({file, first, end, rate}) {
   let ret = [];
   let after = null;
   rate = 1.0/rate;
-  if (first) ret.push([first[1]*rate,first[0]]);
+  if (first) ret.push([first[0]*rate,first[1]]);
   let within = false;
   do {
     line = await file.readLine();
@@ -148,9 +148,9 @@ async function loadAndProcess(params) {
     ({price:priceB, done:doneB, after} = await readInterval({file: fileB, end: intervalEnd, first:afterB, rate:rateB}));
     afterB = after;
     done = doneA || doneB || curr >= end;
-    //console.log({priceA, priceB, doneA, doneB, afterA, afterB});
      
-
+    priceA = priceA.toFixed(2)*1.0;
+    priceB = priceB.toFixed(2)*1.0;
 
     let dt = dateformat(new Date(intervalEnd*1000), 'mm-dd-yyyy hh:MM:ss TT Z', true);
     let spread = ((priceA - priceB) / priceA) * 100.0;
