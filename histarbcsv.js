@@ -14,8 +14,11 @@ async function readInterval({file, first, start, end, rate, dbg}) {
   let ret = [];
   let after = null;
   rate = 1.0/rate;
-  if (end > first[2]) return {
+  if (end < first[2]) {
+    console.log("Inteval End is before first.",end, first);
+    return {
      done: false, price: 0, after: first, data:[]
+    };
   }
   if (first) ret.push([first[0]*rate,first[1]]);
   let within = false;
@@ -28,10 +31,10 @@ async function readInterval({file, first, start, end, rate, dbg}) {
       time = time *1;
       price= price *1;
       vol = vol * 1;
-      within = (time <= end);
+      within = (time <= end && time >= start);
       if (within) ret.push([vol,price*rate]); else after=[vol,price,time];
       count++;
-      if (!within) console.log(end - time);
+      if (!within) console.log("not within, start is",start, new Date(start*1000)," end is",new Date(end*1000), 'time is',new Date(time*1000));
       if (dbg) {
         console.log(new Date(time*1000), new Date(end*1000));
 
@@ -93,11 +96,13 @@ async function skipToStart({file, start, count}) {
  
   while (line != null && time < start_) {
     line = await file.readLine();
-    let parts = line.split(',');
-    time = parts[0] * 1;
-    skipped++;
-    let perc =( skipped / count * 100.0).toFixed(0)+'%';   
-    if (skipped % 100000 == 0) console.log('skipped '+skipped+' lines '+perc);
+    if (line) {
+      let parts = line.split(',');
+      time = parts[0] * 1;
+      skipped++;
+      let perc =( skipped / count * 100.0).toFixed(0)+'%';   
+      if (skipped % 100000 == 0) console.log('skipped '+skipped+' lines '+perc);
+    }
   }
 
   console.log("skipped "+skipped+" lines, line time is ", new Date(time*1000));
@@ -139,24 +144,23 @@ async function loadAndProcess(params) {
   let outcsv = fs.createWriteStream('data/downloads/'+outfname);
 
   let intervalEnd = start.getTime() / 1000;
-  let done = false;
-  let lastPerc = 0;
+  let done = false; let cc = 0;
+  let lastPerc = 0, lastSpread = -1000;
   let total = (end.getTime()/1000) - (start.getTime()/1000);
   let afterA = false; let afterB = false, curr = new Date('01-01-1970');
+  let lastPriceA = 0, lastPriceB = 0;
   do {
+    let start_ = intervalEnd;
     intervalEnd += intervalSeconds; 
     curr = new Date(intervalEnd*1000);
     let rateA = await getRate({currency:exchAcurr, time: curr});
     let rateB = await getRate({currency:exchBcurr, time: curr});
-    
-    let {price:priceA, done:doneA, after, data} = await readInterval({file: fileA, end: intervalEnd, first:afterA, rate:rateA, dbg:true});
+    console.log("---------------- read AAAA ------------------"); 
+    let {price:priceA, done:doneA, after, data} = await readInterval({file: fileA, start:start_, end: intervalEnd, first:afterA, rate:rateA, dbg:true});
     afterA = after;
-    if (priceA < 100 ) {
-       console.log({priceA, done, after, data}, 'fail');
-       //process.exit();
-    }
     let priceB, doneB;
-    ({price:priceB, done:doneB, after} = await readInterval({file: fileB, end: intervalEnd, first:afterB, rate:rateB}));
+    console.log("--------------- read BBBB -------------------");
+    ({price:priceB, done:doneB, after} = await readInterval({file: fileB, start:start_, end: intervalEnd, first:afterB, rate:rateB}));
     afterB = after;
     done = doneA || doneB || curr >= end;
 
@@ -165,17 +169,25 @@ async function loadAndProcess(params) {
     }
     priceA = priceA.toFixed(2)*1.0;
     priceB = priceB.toFixed(2)*1.0;
-
+    if (priceA == 0) priceA = lastPriceA;
+    if (priceB == 0) priceB = lastPriceB;
+ 
     let dt = dateformat(new Date(intervalEnd*1000), 'mm-dd-yyyy hh:MM:ss TT Z', true);
     let spread = ((priceA - priceB) / priceA) * 100.0;
-    outcsv.write([dt, priceA, priceB, spread.toFixed(2)].join(','));
-    outcsv.write('\n');
+    if (!(priceA == 0 || priceB == 0)) {
+      outcsv.write([dt, priceA, priceB, spread.toFixed(2)].join(','));
+      outcsv.write('\n');
+      lastPriceA = priceA;
+      lastPriceB = priceB;
+    }
+  
     let percentDone =(((total-intervalEnd) / total) * 100.0).toFixed(0) ;
     if (percentDone % 5 == 0 && lastPerc != percentDone) {
       console.log(dateformat(curr,'mm-dd hh:MM:ss TT Z'));
       lastPerc = percentDone;
     }
-  } while (!done);
+    cc++;
+  } while (!done); // && cc < 2);
 
   outcsv.close(); 
 }
@@ -204,7 +216,9 @@ async function test() {
   //	         exchBcurr:'USD'});
   //await histCSV({intervalSeconds:60,start, end, exchA:'kraken',exchB:'bitstamp',exchAcurr:'USD',
   //	         exchBcurr:'USD'});
-  await histCSV({intervalSeconds:60,start, end, exchA:'btcc',exchB:'bitstamp',exchAcurr:'USD',
+  //await histCSV({intervalSeconds:60,start, end, exchA:'btcc',exchB:'bitstamp',exchAcurr:'USD',
+  //	         exchBcurr:'USD'});
+  await histCSV({intervalSeconds:60,start, end, exchA:'hitbtc',exchB:'bitstamp',exchAcurr:'USD',
   	         exchBcurr:'USD'});
 }
 
